@@ -1,0 +1,131 @@
+---
+title: "HW6: Textual Analysis"
+author: "Will Fleischer"
+date:  "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+```{r setup, include = F}
+library(tidyverse)
+```
+
+```{r, message = F}
+trees = read_csv("C:/Users/wfly/OneDrive - University of North Carolina at Chapel Hill/Desktop/PLAN 372/RDS-2016-0005/Data/TS3_Raw_tree_data.csv")
+```
+
+
+# Question 1:
+The dataset does not contain a state column, but does contain a city column which contains both city and state information (e.g. Charlotte, NC). Use a regular expression to create separate columns for the city name and state abbreviation, and use these columns to answer the following questions.
+
+How many records are there in each state (include a table or bar plot)? [3 points]
+```{r}
+# matching with two alphanumeric values after a comma to retrieve state
+trees$State = str_match(trees$City, ", [:alnum:][:alnum:]")
+# removing the comma and space afterwards
+trees$State = str_match(trees$State, "[:alnum:][:alnum:]")
+
+# separating city by removing state, using what we did to extract state
+trees$City = str_replace(trees$City, ", [:alnum:][:alnum:]", "")
+
+# count function to see number of trees per state
+by_state = count(trees, State)
+
+# using geom_col to represent count values in the data.
+ggplot(by_state, aes(x = State, y = n,)) + 
+  geom_col() + ylab("Count")
+```
+
+# Question 2:
+Since different trees grow differently in different parts of the country, the city wants you to only use data from North and South Carolina. Filter the dataset to only these states, and use that filtered dataset for all remaining questions.
+
+What cities did they collect data from in North and South Carolina? [1 point]
+
+**The collected data is from Charleston and Charlotte**
+
+```{r}
+# filtering by NC and SC
+carolinas = filter(trees, State == "NC" | State == "SC")
+# Seeing which cities are represented by using the unique function
+unique(carolinas$City)
+```
+
+# Question 3: Genera and species
+
+The city wishes to know what types of trees in the dataset have the largest crown (i.e. their branches and leaves cover the most area, maximizing shade). The crown size is in the column AvgCdia (m), in meters.
+
+The data contain the scientific names of the species of each surveyed tree. Scientific names use binomial nomenclature, where the scientific names contain both a genus (plural genera) and species. For instance, Acer saccharumLinks to an external site. is the sugar maple; the genus is Acer and the species is saccharum. Trees within a genus are related and may share physical characteristics. For instance, Acer rubrumLinks to an external site. or the red maple is another large maple tree. To maximize sample size, the city has requested you compute the average canopy diameter for each genus. This requires you to write a regular expression to extract the genus.
+
+What genus of trees has the largest crown diameter in North and South Carolina? [2 points]
+
+**The genus of tree with the larges crown diameter in the Carolinas is the Quercus.**
+
+```{r}
+# seeing which scientific names are represented
+unique(carolinas$ScientificName)
+
+# separating the genus from the species
+carolinas$Genus = str_match(carolinas$ScientificName, "^[:alnum:]+[:space:]")
+# removing a space left at the end of the genus values
+carolinas$Genus = substr(carolinas$Genus, 1, nchar(carolinas$Genus)-1)
+
+# grouping by genus and summarizing by mean crown size
+by_genus = group_by(carolinas, Genus)
+average_by_genus = summarize(by_genus, average_crown = mean(`AvgCdia (m)`), na.rm = TRUE)
+
+# showing the five highest values
+head(arrange(average_by_genus, desc(average_crown)),5)
+```
+
+# Extra Credit:
+
+# Tree Age
+Older trees, of course, have larger crowns. Are there differences in the average age of the different genera of trees in the dataset? Might this explain the results of the previous question? [1 point]
+
+**The Quercus genus has a significantly higher average age than any other genus, which is likely why it is the genus with the largest crowns on average**
+```{r}
+ggplot(carolinas, mapping = aes(x = Genus, y = Age)) + 
+  geom_count() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+```
+
+Recommend a genera that produces a large crown quickly (among trees in North and South Carolina). You can use any analytical methods you want (group by, plots, linear regression, etc.). Document the process by which you chose this type of tree. [2 points]
+
+**For trees within the first quartile in age of all trees in the Carolinas, the tree that produces the largest crowns on average is the Gleditsia genus, with an average crown size of 6.47.**
+
+```{r}
+# finding spread of data, will look at trees with ages at or below the value for the first quartile to determine our quick criteria
+first_quartile = summary(carolinas$Age)[2]
+
+# creating new dataset where age is at or below the first quartile
+quick = filter(carolinas, Age <= first_quartile)
+
+
+quick_by_genus = group_by(quick, Genus)
+quick_average = summarize(quick_by_genus, average_crown = mean(`AvgCdia (m)`), na.rm = TRUE)
+head(arrange(quick_average, desc(average_crown)),5)
+
+
+```
+# Species
+So far, all of the analysis has focused on genera. Refine your regular expression to also extract the species as well, as a separate column. Within each genus of tree in North and South Carolina, how many species are recorded in the dataset? [2 points]
+
+```{r}
+# ensuring additional criteria in cases is met - luckily the method I used is able to account for these cases
+unique(carolinas$ScientificName)
+
+
+# extracting species
+carolinas$Species = str_match(carolinas$ScientificName, "[:space:]+[:alnum:]+")
+# removing space at beginning
+carolinas$Species = substring(carolinas$Species, 2)
+
+# use count function to see how many trees of each species a genus has
+count(carolinas, Genus, Species)
+```
+
+
+
+
+
+
+
+
